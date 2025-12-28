@@ -94,26 +94,28 @@ function ChatView({ index = 0 }: { index?: number }) {
           <Presentation>
             <div className="relative flex h-full w-full flex-col">
               {!isLoading && <Header />}
-              {isLandingPage ? (
-                <div className="flex flex-1 flex-col items-center justify-end sm:justify-center">
+              <>
+                <div
+                  className={cn(
+                    'flex flex-col',
+                    isLandingPage
+                      ? 'flex-1 items-center justify-end sm:justify-center'
+                      : 'h-full overflow-y-auto',
+                  )}
+                >
                   {content}
-                  <div className="w-full max-w-3xl transition-all duration-200 xl:max-w-4xl">
+                  <div
+                    className={cn(
+                      'w-full',
+                      isLandingPage && 'max-w-3xl transition-all duration-200 xl:max-w-4xl',
+                    )}
+                  >
                     <ChatForm index={index} />
-                    <ConversationStarters />
+                    {isLandingPage ? <ConversationStarters /> : <Footer />}
                   </div>
                 </div>
-              ) : (
-                <>
-                  <div className="flex-1 overflow-y-auto pt-14">
-                    {content}
-                  </div>
-                  <div className="w-full">
-                    <ChatForm index={index} />
-                    <Footer />
-                  </div>
-                </>
-              )}
-              {isLandingPage && <Footer />}
+                {isLandingPage && <Footer />}
+              </>
             </div>
           </Presentation>
         </AddedChatContext.Provider>
