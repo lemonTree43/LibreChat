@@ -331,15 +331,10 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
   }, []);
 
   const handleDialogWheel = useCallback((e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-      setDialogZoom((prev) => Math.min(Math.max(prev + delta, MIN_ZOOM), MAX_ZOOM));
-    }
-    // // In the expanded dialog, allow direct wheel zoom without modifier keys
-    // e.preventDefault();
-    // const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-    // setDialogZoom((prev) => Math.min(Math.max(prev + delta, MIN_ZOOM), MAX_ZOOM));
+    // In the expanded dialog, allow zooming with mouse wheel directly (no modifier key needed)
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+    setDialogZoom((prev) => Math.min(Math.max(prev + delta, MIN_ZOOM), MAX_ZOOM));
   }, []);
 
   const handleDialogMouseDown = useCallback(
@@ -374,14 +369,23 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
     setIsDialogPanning(false);
   }, []);
 
-  // Mouse wheel zoom
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-      setZoom((prev) => Math.min(Math.max(prev + delta, MIN_ZOOM), MAX_ZOOM));
-    }
-  }, []);
+  // Mouse wheel zoom - use native event listener with passive: false to prevent scroll
+  // Re-run when blobUrl changes (which indicates we've transitioned to success/loading with previous state)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheelNative = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+        setZoom((prev) => Math.min(Math.max(prev + delta, MIN_ZOOM), MAX_ZOOM));
+      }
+    };
+
+    container.addEventListener('wheel', handleWheelNative, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheelNative);
+  }, [blobUrl, isLoading, error]);
 
   // Pan handlers
   const handleMouseDown = useCallback(
@@ -683,7 +687,6 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
               isPanning ? 'cursor-grabbing' : 'cursor-grab',
             )}
             style={{ height: `${calculatedHeight}px` }}
-            onWheel={handleWheel}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
@@ -877,7 +880,6 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
             isPanning ? 'cursor-grabbing' : 'cursor-grab',
           )}
           style={{ height: `${calculatedHeight}px` }}
-          onWheel={handleWheel}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
