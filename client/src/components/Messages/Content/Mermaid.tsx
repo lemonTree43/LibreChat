@@ -33,7 +33,7 @@ interface MermaidProps {
 }
 
 const MIN_ZOOM = 0.25;
-const MAX_ZOOM = 3;
+const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.25;
 const MIN_CONTAINER_HEIGHT = 100;
 const MAX_CONTAINER_HEIGHT = 500;
@@ -151,11 +151,11 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
           svgElement.setAttribute('viewBox', `0 0 ${width} ${height}`);
         }
 
-        // Remove fixed width/height attributes and set as CSS for proper scaling
+        // Remove fixed width/height attributes - let the <img> element control size
+        // This allows the SVG to scale freely beyond its original dimensions
         svgElement.removeAttribute('width');
         svgElement.removeAttribute('height');
-        svgElement.style.width = `${width}px`;
-        svgElement.style.height = `${height}px`;
+        svgElement.removeAttribute('style');
       }
 
       // Ensure SVG has proper XML namespace
@@ -387,7 +387,7 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
     return () => container.removeEventListener('wheel', handleWheelNative);
   }, [blobUrl, isLoading, error]);
 
-  // Pan handlers
+  // Pan handlers - use document-level listeners when panning to continue pan outside container
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       // Only start panning on left click and not on buttons/icons inside buttons
@@ -401,32 +401,91 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
     [pan],
   );
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (isPanning) {
-        setPan({
-          x: e.clientX - panStartRef.current.x,
-          y: e.clientY - panStartRef.current.y,
-        });
-      }
-    },
-    [isPanning],
-  );
+  // Attach document-level listeners when panning starts
+  useEffect(() => {
+    if (!isPanning) return;
 
-  const handleMouseUp = useCallback(() => {
-    setIsPanning(false);
-  }, []);
+    const handleDocumentMouseMove = (e: MouseEvent) => {
+      setPan({
+        x: e.clientX - panStartRef.current.x,
+        y: e.clientY - panStartRef.current.y,
+      });
+    };
 
-  const handleMouseLeave = useCallback(() => {
-    setIsPanning(false);
-  }, []);
+    const handleDocumentMouseUp = () => {
+      setIsPanning(false);
+    };
+
+    document.addEventListener('mousemove', handleDocumentMouseMove);
+    document.addEventListener('mouseup', handleDocumentMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleDocumentMouseMove);
+      document.removeEventListener('mouseup', handleDocumentMouseUp);
+    };
+  }, [isPanning]);
 
   // Whether to show controls (on hover, touch device, or when code is shown)
   const showControls = isHovered || isTouchDevice || showCode;
 
-  // Header JSX - inlined to avoid remounting on re-renders (which breaks CSS transitions)
+  // Shared style constants
   const headerBase =
-    'absolute left-0 right-0 top-0 z-20 flex items-center justify-between rounded-tl-md rounded-tr-md bg-gray-700/90 px-4 py-2 font-sans text-xs text-gray-200 backdrop-blur-sm transition-opacity duration-200';
+    'absolute left-0 right-0 top-0 z-20 flex items-center justify-between rounded-tl-md rounded-tr-md bg-gray-700/80 px-4 py-2 font-sans text-xs text-gray-200 backdrop-blur-sm transition-opacity duration-200';
+
+  const buttonClass =
+    'h-auto gap-1 rounded-sm px-1 py-0 text-xs text-gray-200 hover:bg-gray-600 hover:text-white focus-visible:ring-white focus-visible:ring-offset-0';
+
+  // Reusable header buttons - these are stable JSX elements that don't cause remounts
+  // because they're rendered as children, not as component function calls.
+  // Using useMemo ensures the same object reference is returned between renders
+  // (when dependencies haven't changed), optimizing React's reconciliation.
+  const headerButtons = useMemo(
+    () => ({
+      expand: (
+        <Button
+          ref={expandButtonRef}
+          variant="ghost"
+          size="sm"
+          className={buttonClass}
+          onClick={() => {
+            setDialogShowCode(false);
+            setDialogZoom(1);
+            setDialogPan({ x: 0, y: 0 });
+            setIsDialogOpen(true);
+          }}
+          title={localize('com_ui_expand')}
+        >
+          <Expand className="h-4 w-4" />
+          {localize('com_ui_expand')}
+        </Button>
+      ),
+      showCodeButton: (
+        <Button
+          ref={showCodeButtonRef}
+          variant="ghost"
+          size="sm"
+          className={`${buttonClass} min-w-[6rem]`}
+          onClick={handleToggleCode}
+        >
+          {showCode ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          {showCode ? localize('com_ui_hide_code') : localize('com_ui_show_code')}
+        </Button>
+      ),
+      copyButton: (
+        <Button
+          ref={copyButtonRef}
+          variant="ghost"
+          size="sm"
+          className={buttonClass}
+          onClick={handleCopy}
+        >
+          {isCopied ? <CheckMark className="h-[18px] w-[18px]" /> : <Clipboard />}
+          {localize('com_ui_copy_code')}
+        </Button>
+      ),
+    }),
+    [localize, showCode, isCopied, handleToggleCode, handleCopy],
+  );
 
   // Zoom controls - inline JSX to avoid stale closure issues
   const zoomControls = (
@@ -656,26 +715,8 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
           >
             <span>{localize('com_ui_mermaid')}</span>
             <div className="ml-auto flex gap-2">
-              <Button
-                ref={showCodeButtonRef}
-                variant="ghost"
-                size="sm"
-                className="h-auto min-w-[6rem] gap-1 rounded-sm px-1 py-0 text-xs text-gray-200 hover:bg-gray-600 hover:text-white focus-visible:ring-white focus-visible:ring-offset-0"
-                onClick={handleToggleCode}
-              >
-                {showCode ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                {showCode ? localize('com_ui_hide_code') : localize('com_ui_show_code')}
-              </Button>
-              <Button
-                ref={copyButtonRef}
-                variant="ghost"
-                size="sm"
-                className="h-auto gap-1 rounded-sm px-1 py-0 text-xs text-gray-200 hover:bg-gray-600 hover:text-white focus-visible:ring-white focus-visible:ring-offset-0"
-                onClick={handleCopy}
-              >
-                {isCopied ? <CheckMark className="h-[18px] w-[18px]" /> : <Clipboard />}
-                {localize('com_ui_copy_code')}
-              </Button>
+              {headerButtons.showCodeButton}
+              {headerButtons.copyButton}
             </div>
           </div>
           <div
@@ -688,17 +729,14 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
             )}
             style={{ height: `${calculatedHeight}px` }}
             onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseLeave}
           >
             <div className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded border border-border-light bg-surface-secondary px-2 py-1 text-xs text-text-secondary">
               <Spinner className="h-3 w-3" />
             </div>
             <div
-              className="flex h-full w-full items-center justify-center"
+              className="absolute inset-0 flex items-center justify-center"
               style={{
-                transform: `translate(${pan.x}px, ${pan.y}px)`,
+                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
                 transition: isPanning ? 'none' : 'transform 0.1s ease-out',
               }}
             >
@@ -707,8 +745,8 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
                 alt="Mermaid diagram"
                 className="select-none opacity-70"
                 style={{
-                  width: svgDimensions ? `${svgDimensions.width * initialScale * zoom}px` : 'auto',
-                  height: svgDimensions ? `${svgDimensions.height * initialScale * zoom}px` : 'auto',
+                  width: svgDimensions ? `${svgDimensions.width * initialScale}px` : 'auto',
+                  height: svgDimensions ? `${svgDimensions.height * initialScale}px` : 'auto',
                 }}
                 draggable={false}
               />
@@ -743,26 +781,8 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
         <div className={cn(headerBase, 'relative rounded-tl-md rounded-tr-md')}>
           <span>{localize('com_ui_mermaid')}</span>
           <div className="ml-auto flex gap-2">
-            <Button
-              ref={showCodeButtonRef}
-              variant="ghost"
-              size="sm"
-              className="h-auto min-w-[6rem] gap-1 rounded-sm px-1 py-0 text-xs text-gray-200 hover:bg-gray-600 hover:text-white focus-visible:ring-white focus-visible:ring-offset-0"
-              onClick={handleToggleCode}
-            >
-              {showCode ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              {showCode ? localize('com_ui_hide_code') : localize('com_ui_show_code')}
-            </Button>
-            <Button
-              ref={copyButtonRef}
-              variant="ghost"
-              size="sm"
-              className="h-auto gap-1 rounded-sm px-1 py-0 text-xs text-gray-200 hover:bg-gray-600 hover:text-white focus-visible:ring-white focus-visible:ring-offset-0"
-              onClick={handleCopy}
-            >
-              {isCopied ? <CheckMark className="h-[18px] w-[18px]" /> : <Clipboard />}
-              {localize('com_ui_copy_code')}
-            </Button>
+            {headerButtons.showCodeButton}
+            {headerButtons.copyButton}
           </div>
         </div>
         <div className="rounded-b-md border-t border-red-500/30 bg-red-500/10 p-4">
@@ -821,42 +841,9 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
         >
           <span>{localize('com_ui_mermaid')}</span>
           <div className="ml-auto flex gap-2">
-            <Button
-              ref={expandButtonRef}
-              variant="ghost"
-              size="sm"
-              className="h-auto gap-1 rounded-sm px-1 py-0 text-xs text-gray-200 hover:bg-gray-600 hover:text-white focus-visible:ring-white focus-visible:ring-offset-0"
-              onClick={() => {
-                setDialogShowCode(false);
-                setDialogZoom(1);
-                setDialogPan({ x: 0, y: 0 });
-                setIsDialogOpen(true);
-              }}
-              title={localize('com_ui_expand')}
-            >
-              <Expand className="h-4 w-4" />
-              {localize('com_ui_expand')}
-            </Button>
-            <Button
-              ref={showCodeButtonRef}
-              variant="ghost"
-              size="sm"
-              className="h-auto min-w-[6rem] gap-1 rounded-sm px-1 py-0 text-xs text-gray-200 hover:bg-gray-600 hover:text-white focus-visible:ring-white focus-visible:ring-offset-0"
-              onClick={handleToggleCode}
-            >
-              {showCode ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              {showCode ? localize('com_ui_hide_code') : localize('com_ui_show_code')}
-            </Button>
-            <Button
-              ref={copyButtonRef}
-              variant="ghost"
-              size="sm"
-              className="h-auto gap-1 rounded-sm px-1 py-0 text-xs text-gray-200 hover:bg-gray-600 hover:text-white focus-visible:ring-white focus-visible:ring-offset-0"
-              onClick={handleCopy}
-            >
-              {isCopied ? <CheckMark className="h-[18px] w-[18px]" /> : <Clipboard />}
-              {localize('com_ui_copy_code')}
-            </Button>
+            {headerButtons.expand}
+            {headerButtons.showCodeButton}
+            {headerButtons.copyButton}
           </div>
         </div>
         {showCode && (
@@ -881,14 +868,11 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
           )}
           style={{ height: `${calculatedHeight}px` }}
           onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
         >
           <div
-            className="flex h-full w-full items-center justify-center"
+            className="absolute inset-0 flex items-center justify-center"
             style={{
-              transform: `translate(${pan.x}px, ${pan.y}px)`,
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
               transition: isPanning ? 'none' : 'transform 0.1s ease-out',
             }}
           >
@@ -897,8 +881,8 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
               alt="Mermaid diagram"
               className="select-none"
               style={{
-                width: svgDimensions ? `${svgDimensions.width * initialScale * zoom}px` : 'auto',
-                height: svgDimensions ? `${svgDimensions.height * initialScale * zoom}px` : 'auto',
+                width: svgDimensions ? `${svgDimensions.width * initialScale}px` : 'auto',
+                height: svgDimensions ? `${svgDimensions.height * initialScale}px` : 'auto',
               }}
               draggable={false}
             />
