@@ -2928,4 +2928,9 @@ html {
 .canvas-content h6 {
   margin-bottom: 0.75rem !important;
 }
+
+/* Canvas panel transition for smooth expand/collapse */
+.canvas-panel-transition {
+  transition: flex-grow 0.3s ease-out, flex-shrink 0.3s ease-out, flex-basis 0.3s ease-out !important;
+}
  

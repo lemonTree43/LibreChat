@@ -19,6 +19,7 @@ const SidePanel = ({
   panelRef,
   navCollapsedSize = 3,
   hasArtifacts,
+  hasExpandedCanvas = false,
   minSize,
   setMinSize,
   collapsedSize,
@@ -31,6 +32,7 @@ const SidePanel = ({
 }: {
   defaultSize?: number;
   hasArtifacts: boolean;
+  hasExpandedCanvas?: boolean;
   navCollapsedSize?: number;
   minSize: number;
   setMinSize: React.Dispatch<React.SetStateAction<number>>;
@@ -148,7 +150,7 @@ const SidePanel = ({
       <ResizablePanel
         tagName="nav"
         id="controls-nav"
-        order={hasArtifacts ? 3 : 2}
+        order={hasArtifacts && hasExpandedCanvas ? 4 : hasArtifacts || hasExpandedCanvas ? 3 : 2}
         aria-label={localize('com_ui_controls')}
         role="navigation"
         collapsedSize={collapsedSize}

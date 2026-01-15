@@ -5,6 +5,7 @@ import { getConfigDefaults } from 'librechat-data-provider';
 import { ResizablePanel, ResizablePanelGroup, useMediaQuery } from '@librechat/client';
 import type { ImperativePanelHandle } from 'react-resizable-panels';
 import { useGetStartupConfig } from '~/data-provider';
+import CanvasPlaceholderPanel from './CanvasPlaceholderPanel';
 import ArtifactsPanel from './ArtifactsPanel';
 import { normalizeLayout } from '~/utils';
 import SidePanel from './SidePanel';
@@ -38,6 +39,7 @@ const SidePanelGroup = memo(
     );
 
     const panelRef = useRef<ImperativePanelHandle>(null);
+    const messagesPanelRef = useRef<ImperativePanelHandle>(null);
     const [minSize, setMinSize] = useState(defaultMinSize);
     const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
     const [fullCollapse, setFullCollapse] = useState(fullPanelCollapse);
@@ -46,20 +48,27 @@ const SidePanelGroup = memo(
 
     const isSmallScreen = useMediaQuery('(max-width: 767px)');
     const hideSidePanel = useRecoilValue(store.hideSidePanel);
+    const expandedCanvasId = useRecoilValue(store.expandedCanvasIdState);
+    const [shouldRenderCanvas, setShouldRenderCanvas] = useState(expandedCanvasId != null);
 
     const calculateLayout = useCallback(() => {
-      const hasMiddlePanel = artifacts != null;
+      const hasArtifacts = artifacts != null;
+      const hasCanvas = expandedCanvasId != null;
+      const hasMiddlePanel = hasArtifacts || hasCanvas;
+
       if (!hasMiddlePanel) {
         const navSize = defaultLayout.length === 2 ? defaultLayout[1] : defaultLayout[2];
         return [100 - navSize, navSize];
       } else {
-        const navSize = 0;
+        // When canvas/artifacts expanded, use minimal nav size (collapsed)
+        // Give main and middle panels equal space
+        const navSize = 3; // Collapsed nav size
         const remainingSpace = 100 - navSize;
         const newMainSize = Math.floor(remainingSpace / 2);
         const middlePanelSize = remainingSpace - newMainSize;
         return [newMainSize, middlePanelSize, navSize];
       }
-    }, [artifacts, defaultLayout]);
+    }, [artifacts, expandedCanvasId, defaultLayout]);
 
     const currentLayout = useMemo(() => normalizeLayout(calculateLayout()), [calculateLayout]);
 
@@ -88,7 +97,32 @@ const SidePanelGroup = memo(
       }
     }, [isSmallScreen, defaultCollapsed, navCollapsedSize, fullPanelCollapse]);
 
-    const minSizeMain = useMemo(() => (artifacts != null ? 15 : 30), [artifacts]);
+    const hasMiddlePanel = artifacts != null || expandedCanvasId != null;
+    const minSizeMain = useMemo(() => (hasMiddlePanel ? 15 : 30), [hasMiddlePanel]);
+
+    // Compute nav panel constraints based on canvas expansion state
+    const effectiveMinSize = useMemo(
+      () => (expandedCanvasId != null ? 0 : minSize),
+      [expandedCanvasId, minSize],
+    );
+    const effectiveCollapsedSize = useMemo(
+      () => (expandedCanvasId != null ? 0 : collapsedSize),
+      [expandedCanvasId, collapsedSize],
+    );
+
+    // Resize messages panel and collapse side panel when canvas expands/collapses
+    useEffect(() => {
+      if (expandedCanvasId != null) {
+        // Canvas is expanding - shrink messages panel and collapse side panel
+        panelRef.current?.collapse();
+
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            messagesPanelRef.current?.resize(currentLayout[0]);
+          });
+        });
+      }
+    }, [expandedCanvasId, currentLayout]);
 
     /** Memoized close button handler to prevent re-creating it */
     const handleClosePanel = useCallback(() => {
@@ -110,10 +144,12 @@ const SidePanelGroup = memo(
           className="relative h-full w-full flex-1 overflow-auto bg-presentation"
         >
           <ResizablePanel
+            ref={messagesPanelRef}
             defaultSize={currentLayout[0]}
             minSize={minSizeMain}
             order={1}
             id="messages-view"
+            className={expandedCanvasId != null ? 'canvas-panel-transition' : ''}
           >
             {children}
           </ResizablePanel>
@@ -128,19 +164,31 @@ const SidePanelGroup = memo(
             />
           )}
 
+          {!isSmallScreen && (
+            <CanvasPlaceholderPanel
+              isExpanded={expandedCanvasId != null}
+              currentLayout={currentLayout}
+              minSizeMain={minSizeMain}
+              shouldRender={shouldRenderCanvas}
+              onRenderChange={setShouldRenderCanvas}
+              hasArtifacts={shouldRenderArtifacts}
+            />
+          )}
+
           {!hideSidePanel && interfaceConfig.sidePanel === true && (
             <SidePanel
               panelRef={panelRef}
-              minSize={minSize}
+              minSize={effectiveMinSize}
               setMinSize={setMinSize}
               isCollapsed={isCollapsed}
               setIsCollapsed={setIsCollapsed}
-              collapsedSize={collapsedSize}
+              collapsedSize={effectiveCollapsedSize}
               setCollapsedSize={setCollapsedSize}
               fullCollapse={fullCollapse}
               setFullCollapse={setFullCollapse}
               interfaceConfig={interfaceConfig}
               hasArtifacts={shouldRenderArtifacts}
+              hasExpandedCanvas={shouldRenderCanvas}
               defaultSize={currentLayout[currentLayout.length - 1]}
             />
           )}
