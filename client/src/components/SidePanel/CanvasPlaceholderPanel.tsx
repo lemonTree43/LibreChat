@@ -1,5 +1,5 @@
 import { useRef, useEffect, memo, useCallback } from 'react';
-import { useSetRecoilState } from 'recoil';
+import { useRecoilValue, useSetRecoilState } from 'recoil';
 import { ResizableHandleAlt, ResizablePanel } from '@librechat/client';
 import type { ImperativePanelHandle } from 'react-resizable-panels';
 import store from '~/store';
@@ -22,20 +22,39 @@ const CanvasPlaceholderPanel = memo(function CanvasPlaceholderPanel({
   hasArtifacts,
 }: CanvasPlaceholderPanelProps) {
   const panelRef = useRef<ImperativePanelHandle>(null);
-  const setPlaceholderElement = useSetRecoilState(store.canvasPlaceholderElementState);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const setTargetRect = useSetRecoilState(store.canvasTargetRectState);
+  const expandedCanvasId = useRecoilValue(store.expandedCanvasIdState);
 
-  // Callback ref to store the element directly in Recoil
-  const placeholderRefCallback = useCallback(
-    (element: HTMLDivElement | null) => {
-      setPlaceholderElement(element);
-    },
-    [setPlaceholderElement],
-  );
+  // Update target rect when container size/position changes
+  const updateTargetRect = useCallback(() => {
+    if (containerRef.current && expandedCanvasId) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setTargetRect(rect);
+    }
+  }, [expandedCanvasId, setTargetRect]);
 
-  // Cleanup on unmount
+  // Observe container for size changes
   useEffect(() => {
-    return () => setPlaceholderElement(null);
-  }, [setPlaceholderElement]);
+    if (!containerRef.current || !expandedCanvasId) return;
+
+    updateTargetRect();
+
+    const observer = new ResizeObserver(updateTargetRect);
+    observer.observe(containerRef.current);
+
+    window.addEventListener('resize', updateTargetRect);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateTargetRect);
+    };
+  }, [expandedCanvasId, updateTargetRect]);
+
+  // Cleanup target rect when unmounting or collapsing
+  useEffect(() => {
+    return () => setTargetRect(null);
+  }, [setTargetRect]);
 
   // Expand/collapse panel based on isExpanded
   useEffect(() => {
@@ -45,6 +64,8 @@ const CanvasPlaceholderPanel = memo(function CanvasPlaceholderPanel({
         requestAnimationFrame(() => {
           panelRef.current?.expand();
           panelRef.current?.resize(currentLayout[1]);
+          // Update rect after panel expands
+          setTimeout(updateTargetRect, 50);
         });
       });
     } else if (shouldRender) {
@@ -52,7 +73,7 @@ const CanvasPlaceholderPanel = memo(function CanvasPlaceholderPanel({
       // Delay unmount for collapse animation
       setTimeout(() => onRenderChange(false), 300);
     }
-  }, [isExpanded, shouldRender, onRenderChange, currentLayout]);
+  }, [isExpanded, shouldRender, onRenderChange, currentLayout, updateTargetRect]);
 
   if (!shouldRender) {
     return null;
@@ -74,12 +95,8 @@ const CanvasPlaceholderPanel = memo(function CanvasPlaceholderPanel({
         id="canvas-placeholder-panel"
         className="canvas-panel-transition"
       >
-        {/* Empty placeholder - just for measuring target position */}
-        <div
-          ref={placeholderRefCallback}
-          className="h-full w-full"
-          style={{ backgroundColor: 'rgba(50, 50, 50, 0.3)' }}
-        />
+        {/* Container for measuring target position - the actual card is rendered via portal */}
+        <div ref={containerRef} className="h-full w-full p-2" />
       </ResizablePanel>
     </>
   );

@@ -20,13 +20,11 @@ export const expandedCanvasIdState = atom<string | null>({
 });
 
 /**
- * Reference to the placeholder element in the canvas panel
- * Used for position calculations during expand/collapse animations
- * We store the element directly (not a ref) to avoid Recoil freezing issues
+ * Target rectangle for the expanded canvas panel
+ * Used for animating the card to/from the expanded position
  */
-export const canvasPlaceholderElementState = atom<HTMLDivElement | null>({
-  key: 'canvasPlaceholderElementState',
+export const canvasTargetRectState = atom<DOMRect | null>({
+  key: 'canvasTargetRectState',
   default: null,
-  // Prevent Recoil from freezing the DOM element
   dangerouslyAllowMutability: true,
 });
