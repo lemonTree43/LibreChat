@@ -2918,3 +2918,14 @@ html {
 .sharepoint-picker-bg {
   background-color: #f5f5f5;
 }
+
+/* Canvas document content - heading spacing */
+.canvas-content h1,
+.canvas-content h2,
+.canvas-content h3,
+.canvas-content h4,
+.canvas-content h5,
+.canvas-content h6 {
+  margin-bottom: 0.75rem !important;
+}
+ 

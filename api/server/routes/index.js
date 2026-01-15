@@ -10,6 +10,7 @@ const prompts = require('./prompts');
 const balance = require('./balance');
 const actions = require('./actions');
 const banner = require('./banner');
+const canvas = require('./canvas');
 const search = require('./search');
 const models = require('./models');
 const convos = require('./convos');
@@ -36,6 +37,7 @@ module.exports = {
   files,
   share,
   banner,
+  canvas,
   agents,
   convos,
   search,

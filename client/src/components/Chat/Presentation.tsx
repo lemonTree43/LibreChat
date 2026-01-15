@@ -59,7 +59,6 @@ export default function Presentation({ children }: { children: React.ReactNode }
 
   /**
    * Memoize artifacts JSX to prevent recreating it on every render
-   * This is critical for performance - prevents entire artifact tree from re-rendering
    */
   const artifactsElement = useMemo(() => {
     if (artifactsVisibility === true && Object.keys(artifacts ?? {}).length > 0) {

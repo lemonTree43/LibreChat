@@ -1,5 +1,6 @@
 import type { AxiosResponse } from 'axios';
 import type * as t from './types';
+import type * as canvas from './types/canvas';
 import * as endpoints from './api-endpoints';
 import * as a from './types/assistants';
 import * as ag from './types/agents';
@@ -912,6 +913,40 @@ export function addTagToConversation(
 }
 export function rebuildConversationTags(): Promise<t.TConversationTagsResponse> {
   return request.post(endpoints.conversationTags('rebuild'));
+}
+
+/* Canvas Documents */
+export function getCanvasDocumentsByConversation(
+  conversationId: string,
+): Promise<canvas.CanvasDocumentsResponse> {
+  return request.get(endpoints.canvasDocumentsByConversation(conversationId));
+}
+
+export function getCanvasDocument(id: string): Promise<canvas.CanvasDocumentResponse> {
+  return request.get(endpoints.canvasDocuments(id));
+}
+
+export function createCanvasDocument(
+  payload: canvas.CreateCanvasDocumentParams & { conversationId?: string; messageId?: string },
+): Promise<canvas.CanvasDocumentResponse> {
+  return request.post(endpoints.canvasDocuments(), payload);
+}
+
+export function updateCanvasDocument(
+  id: string,
+  payload: Partial<canvas.CreateCanvasDocumentParams>,
+): Promise<canvas.CanvasDocumentResponse> {
+  return request.put(endpoints.canvasDocuments(id), payload);
+}
+
+export function deleteCanvasDocument(id: string): Promise<{ message: string }> {
+  return request.delete(endpoints.canvasDocuments(id));
+}
+
+export function deleteCanvasDocumentsByConversation(
+  conversationId: string,
+): Promise<{ message: string; deletedCount: number }> {
+  return request.delete(endpoints.canvasDocumentsByConversation(conversationId));
 }
 
 export function healthCheck(): Promise<string> {

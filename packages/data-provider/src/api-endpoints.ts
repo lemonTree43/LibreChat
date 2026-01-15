@@ -345,6 +345,12 @@ export const conversationTagsList = (pageNumber: string, sort?: string, order?: 
 export const addTagToConversation = (conversationId: string) =>
   `${conversationTags()}/convo/${conversationId}`;
 
+/* Canvas Documents */
+export const canvasDocuments = (id?: string) =>
+  `${BASE_URL}/api/canvas${id ? `/${id}` : ''}`;
+export const canvasDocumentsByConversation = (conversationId: string) =>
+  `${BASE_URL}/api/canvas/conversation/${conversationId}`;
+
 export const userTerms = () => `${BASE_URL}/api/user/terms`;
 export const acceptUserTerms = () => `${BASE_URL}/api/user/terms/accept`;
 export const banner = () => `${BASE_URL}/api/banner`;

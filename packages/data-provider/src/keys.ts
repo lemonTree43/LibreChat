@@ -62,6 +62,9 @@ export enum QueryKeys {
   mcpServer = 'mcpServer',
   /* Active Jobs */
   activeJobs = 'activeJobs',
+  /* Canvas Documents */
+  canvasDocuments = 'canvasDocuments',
+  canvasDocument = 'canvasDocument',
 }
 
 // Dynamic query keys that require parameters

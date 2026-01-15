@@ -22,6 +22,7 @@ import { createPromptGroupModel } from './promptGroup';
 import { createConversationTagModel } from './conversationTag';
 import { createSharedLinkModel } from './sharedLink';
 import { createToolCallModel } from './toolCall';
+import { createCanvasDocumentModel } from './canvasDocument';
 import { createMemoryModel } from './memory';
 import { createAccessRoleModel } from './accessRole';
 import { createAclEntryModel } from './aclEntry';
@@ -56,6 +57,7 @@ export function createModels(mongoose: typeof import('mongoose')) {
     ConversationTag: createConversationTagModel(mongoose),
     SharedLink: createSharedLinkModel(mongoose),
     ToolCall: createToolCallModel(mongoose),
+    CanvasDocument: createCanvasDocumentModel(mongoose),
     MemoryEntry: createMemoryModel(mongoose),
     AccessRole: createAccessRoleModel(mongoose),
     AclEntry: createAclEntryModel(mongoose),
