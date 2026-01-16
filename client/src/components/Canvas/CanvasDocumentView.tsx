@@ -137,7 +137,6 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
         requestAnimationFrame(() => {
           setHasRenderedInitialFrame(true);
           // When collapsing, animate container height back to full card height
-          // This needs to happen at the same time as the portal animation starts
           if (animationPhase === 'collapsing') {
             setContainerHeight(cardHeight);
           }
