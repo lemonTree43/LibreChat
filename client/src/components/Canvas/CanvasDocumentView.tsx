@@ -1,94 +1,95 @@
 import { memo, useCallback, useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useRecoilState, useRecoilValue } from 'recoil';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { useRecoilState, useRecoilValue, useSetRecoilState } from 'recoil';
 import type { CanvasDocument } from 'librechat-data-provider';
+import CanvasCardContent from './CanvasCardContent';
 import store from '~/store';
 
 interface CanvasDocumentViewProps {
   document: CanvasDocument;
 }
 
-type AnimationPhase = 'idle' | 'expanding' | 'expanded' | 'collapsing';
-
-interface AnimationState {
-  phase: AnimationPhase;
-  startRect: DOMRect | null;
-  currentTargetRect: DOMRect | null;
-}
-
 // Height of the small placeholder when expanded
-const PLACEHOLDER_HEIGHT = 56; // p-4 (32px) + text height (~24px)
+const PLACEHOLDER_HEIGHT = 56;
+const ANIMATION_DURATION = 300;
 
 function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLDivElement>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
   const [expandedId, setExpandedId] = useRecoilState(store.expandedCanvasIdState);
+  const [animationPhase, setAnimationPhase] = useRecoilState(store.canvasAnimationPhaseState);
   const targetRect = useRecoilValue(store.canvasTargetRectState);
+  const collapseStartRect = useRecoilValue(store.canvasCollapseStartRectState);
+  const setInlineRect = useSetRecoilState(store.canvasInlineRectState);
+  const setCollapseStartRect = useSetRecoilState(store.canvasCollapseStartRectState);
 
   const isThisExpanded = expandedId === canvasDoc.id;
-  const [animation, setAnimation] = useState<AnimationState>({
-    phase: 'idle',
-    startRect: null,
-    currentTargetRect: null,
-  });
+
+  // Track the starting rect for expand animation (inline position)
+  const expandStartRectRef = useRef<DOMRect | null>(null);
+
+  // Track whether the portal has rendered its initial frame at start position
+  const [hasRenderedInitialFrame, setHasRenderedInitialFrame] = useState(false);
 
   // Track container height for smooth transitions
   const [containerHeight, setContainerHeight] = useState<number | 'auto'>('auto');
   const [cardHeight, setCardHeight] = useState<number>(0);
 
-  const handleCopy = useCallback(
-    async (e: React.MouseEvent) => {
-      e.stopPropagation();
-      const text = canvasDoc.content.replace(/<[^>]*>/g, '');
-      await navigator.clipboard.writeText(text);
-    },
-    [canvasDoc.content],
-  );
+  // Update inline rect when ghost position changes
+  const updateInlineRect = useCallback(() => {
+    if (ghostRef.current && isThisExpanded) {
+      const rect = ghostRef.current.getBoundingClientRect();
+      setInlineRect(rect);
+    }
+  }, [isThisExpanded, setInlineRect]);
 
-  const handleDownload = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      const blob = new Blob([canvasDoc.content], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const a = window.document.createElement('a');
-      a.href = url;
-      a.download = `${canvasDoc.title}.html`;
-      a.click();
-      URL.revokeObjectURL(url);
-    },
-    [canvasDoc.content, canvasDoc.title],
-  );
-
-  // Measure card height on mount and content changes
+  // Observe ghost element for position changes (needed for collapse animation target)
   useEffect(() => {
-    if (measureRef.current && animation.phase === 'idle') {
-      const height = measureRef.current.getBoundingClientRect().height;
+    if (!ghostRef.current || !isThisExpanded) return;
+
+    updateInlineRect();
+
+    const observer = new ResizeObserver(updateInlineRect);
+    observer.observe(ghostRef.current);
+
+    const scrollHandler = () => updateInlineRect();
+    window.addEventListener('scroll', scrollHandler, true);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', scrollHandler, true);
+    };
+  }, [isThisExpanded, updateInlineRect]);
+
+  // Measure card height on mount and content changes (only when this card is idle)
+  useEffect(() => {
+    if (ghostRef.current && !isThisExpanded && animationPhase === 'idle') {
+      const height = ghostRef.current.getBoundingClientRect().height;
       setCardHeight(height);
       setContainerHeight('auto');
     }
-  }, [animation.phase, canvasDoc.content]);
+  }, [animationPhase, canvasDoc.content, isThisExpanded]);
 
-  // Handle expand animation
+  // Handle expand
   const handleExpand = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!cardRef.current || !measureRef.current) return;
+      if (!ghostRef.current) return;
 
-      const startRect = measureRef.current.getBoundingClientRect();
-      const currentHeight = startRect.height;
+      const rect = ghostRef.current.getBoundingClientRect();
+      const currentHeight = rect.height;
 
-      // Set explicit height before animating to placeholder height
+      // Store the start rect for expand animation
+      expandStartRectRef.current = rect;
+      setCollapseStartRect(null);
       setCardHeight(currentHeight);
       setContainerHeight(currentHeight);
 
-      // Start animation after a frame so height is set
+      // Reset initial frame flag
+      setHasRenderedInitialFrame(false);
+
+      // Start animation
       requestAnimationFrame(() => {
-        setAnimation({
-          phase: 'expanding',
-          startRect,
-          currentTargetRect: null,
-        });
+        setAnimationPhase('expanding');
         setExpandedId(canvasDoc.id);
 
         // Animate container to placeholder height
@@ -97,161 +98,133 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
         });
       });
     },
-    [canvasDoc.id, setExpandedId],
+    [canvasDoc.id, setExpandedId, setAnimationPhase, setCollapseStartRect],
   );
 
-  // Handle collapse
+  // Handle collapse - triggered from inline placeholder click
+  // Note: When collapse is triggered from CanvasPlaceholderPanel, it captures the rect there
   const handleCollapse = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
+      if (!isThisExpanded) return;
 
-      // Animate container back to full card height
-      setContainerHeight(cardHeight);
+      // If collapse is triggered from inline placeholder, capture targetRect
+      // (CanvasPlaceholderPanel already captures it when triggered from there)
+      if (!collapseStartRect && targetRect) {
+        setCollapseStartRect(targetRect);
+      }
 
-      setAnimation((prev) => ({
-        phase: 'collapsing',
-        startRect: prev.startRect,
-        currentTargetRect: prev.currentTargetRect,
-      }));
+      // Get current inline ghost position for animation target
+      if (ghostRef.current) {
+        const rect = ghostRef.current.getBoundingClientRect();
+        setInlineRect(rect);
+      }
+
+      // Reset initial frame flag for collapse animation
+      setHasRenderedInitialFrame(false);
+
+      // Start collapsing phase - container height will animate after initial frame renders
+      setAnimationPhase('collapsing');
     },
-    [cardHeight],
+    [setAnimationPhase, setInlineRect, isThisExpanded, targetRect, collapseStartRect, setCollapseStartRect],
   );
 
-  // Watch for target rect to start expand animation
+  // After portal renders at start position, trigger animation to target on next frame
   useEffect(() => {
-    if (animation.phase === 'expanding' && targetRect && isThisExpanded && !animation.currentTargetRect) {
-      // Small delay to ensure the portal card renders at start position first
+    if (!hasRenderedInitialFrame && isThisExpanded && (animationPhase === 'expanding' || animationPhase === 'collapsing')) {
+      // Use double rAF to ensure the browser has painted the initial position
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setHasRenderedInitialFrame(true);
+          // When collapsing, animate container height back to full card height
+          // This needs to happen at the same time as the portal animation starts
+          if (animationPhase === 'collapsing') {
+            setContainerHeight(cardHeight);
+          }
+        });
+      });
+    }
+  }, [hasRenderedInitialFrame, isThisExpanded, animationPhase, cardHeight]);
+
+  // Watch for expand animation completion
+  useEffect(() => {
+    if (animationPhase === 'expanding' && hasRenderedInitialFrame && targetRect && isThisExpanded) {
       const timer = setTimeout(() => {
-        setAnimation((prev) => ({
-          ...prev,
-          currentTargetRect: targetRect,
-        }));
-      }, 50);
+        setAnimationPhase('expanded');
+        // Reset for next animation (collapse)
+        setHasRenderedInitialFrame(false);
+      }, ANIMATION_DURATION);
       return () => clearTimeout(timer);
     }
-  }, [animation.phase, animation.currentTargetRect, targetRect, isThisExpanded]);
+  }, [animationPhase, hasRenderedInitialFrame, targetRect, isThisExpanded, setAnimationPhase]);
 
-  // Keep target rect updated when expanded
+  // Handle collapse animation completion
   useEffect(() => {
-    if ((animation.phase === 'expanded' || animation.phase === 'expanding') && targetRect && isThisExpanded) {
-      setAnimation((prev) => ({
-        ...prev,
-        currentTargetRect: targetRect,
-      }));
-    }
-  }, [targetRect, animation.phase, isThisExpanded]);
-
-  // Handle expand animation end
-  useEffect(() => {
-    if (animation.phase === 'expanding' && animation.currentTargetRect) {
+    if (animationPhase === 'collapsing' && hasRenderedInitialFrame && isThisExpanded) {
       const timer = setTimeout(() => {
-        setAnimation((prev) => ({
-          ...prev,
-          phase: 'expanded',
-        }));
-      }, 350);
+        setExpandedId(null);
+        setAnimationPhase('idle');
+        setContainerHeight('auto');
+        expandStartRectRef.current = null;
+        setCollapseStartRect(null);
+        setHasRenderedInitialFrame(false);
+      }, ANIMATION_DURATION);
       return () => clearTimeout(timer);
     }
-  }, [animation.phase, animation.currentTargetRect]);
+  }, [animationPhase, hasRenderedInitialFrame, isThisExpanded, setExpandedId, setAnimationPhase, setCollapseStartRect]);
 
-  // Handle collapse animation
-  useEffect(() => {
-    if (animation.phase === 'collapsing') {
-      // Get the measurement element position to animate to
-      const getMeasureRect = () => {
-        if (measureRef.current) {
-          return measureRef.current.getBoundingClientRect();
-        }
-        return null;
-      };
-
-      // Wait a frame for measurement element to render, then animate
-      const timer = setTimeout(() => {
-        const endRect = getMeasureRect();
-        if (endRect) {
-          // After animation completes, reset everything
-          setTimeout(() => {
-            setExpandedId(null);
-            setAnimation({ phase: 'idle', startRect: null, currentTargetRect: null });
-            setContainerHeight('auto');
-          }, 350);
-        }
-      }, 50);
-
-      return () => clearTimeout(timer);
-    }
-  }, [animation.phase, setExpandedId]);
-
-  // Get the collapse target position from the measurement element (actual card size)
-  const getCollapseTargetRect = useCallback(() => {
-    if (measureRef.current) {
-      return measureRef.current.getBoundingClientRect();
-    }
-    return null;
-  }, []);
-
-  // Calculate current position for the portal card
+  // Calculate portal card style based on animation phase
   const getPortalStyle = (): React.CSSProperties => {
-    if (animation.phase === 'expanding') {
-      if (animation.currentTargetRect) {
+    if (animationPhase === 'expanding' && isThisExpanded) {
+      const startRect = expandStartRectRef.current;
+
+      if (hasRenderedInitialFrame && targetRect) {
         // Animate to expanded position
         return {
           position: 'fixed',
-          top: animation.currentTargetRect.top,
-          left: animation.currentTargetRect.left,
-          width: animation.currentTargetRect.width,
-          height: animation.currentTargetRect.height,
+          top: targetRect.top,
+          left: targetRect.left,
+          width: targetRect.width,
+          height: targetRect.height,
           zIndex: 9999,
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: `all ${ANIMATION_DURATION}ms cubic-bezier(0.4, 0, 0.2, 1)`,
         };
-      } else if (animation.startRect) {
-        // Start at inline position
+      } else if (startRect) {
+        // Start at inline position (no transition)
         return {
           position: 'fixed',
-          top: animation.startRect.top,
-          left: animation.startRect.left,
-          width: animation.startRect.width,
-          height: animation.startRect.height,
+          top: startRect.top,
+          left: startRect.left,
+          width: startRect.width,
+          height: startRect.height,
           zIndex: 9999,
           transition: 'none',
         };
       }
     }
 
-    if (animation.phase === 'expanded' && animation.currentTargetRect) {
-      // Stay at expanded position
-      return {
-        position: 'fixed',
-        top: animation.currentTargetRect.top,
-        left: animation.currentTargetRect.left,
-        width: animation.currentTargetRect.width,
-        height: animation.currentTargetRect.height,
-        zIndex: 9999,
-        transition: 'all 0.15s ease-out', // Quick transition for resize
-      };
-    }
+    if (animationPhase === 'collapsing' && isThisExpanded) {
+      const inlineRect = ghostRef.current?.getBoundingClientRect();
 
-    if (animation.phase === 'collapsing') {
-      const collapseTarget = getCollapseTargetRect();
-      if (collapseTarget) {
-        // Animate back to inline position
+      if (hasRenderedInitialFrame && inlineRect) {
+        // Animate to inline position
         return {
           position: 'fixed',
-          top: collapseTarget.top,
-          left: collapseTarget.left,
-          width: collapseTarget.width,
-          height: collapseTarget.height,
+          top: inlineRect.top,
+          left: inlineRect.left,
+          width: inlineRect.width,
+          height: inlineRect.height,
           zIndex: 9999,
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: `all ${ANIMATION_DURATION}ms cubic-bezier(0.4, 0, 0.2, 1)`,
         };
-      } else if (animation.currentTargetRect) {
-        // Start at expanded position before we have collapse target
+      } else if (collapseStartRect) {
+        // Start at expanded position (no transition)
         return {
           position: 'fixed',
-          top: animation.currentTargetRect.top,
-          left: animation.currentTargetRect.left,
-          width: animation.currentTargetRect.width,
-          height: animation.currentTargetRect.height,
+          top: collapseStartRect.top,
+          left: collapseStartRect.left,
+          width: collapseStartRect.width,
+          height: collapseStartRect.height,
           zIndex: 9999,
           transition: 'none',
         };
@@ -261,108 +234,67 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
     return {};
   };
 
-  // Card content component
-  const CardContent = ({ isExpandedView = false }: { isExpandedView?: boolean }) => (
-    <div
-      className="flex flex-col gap-1 overflow-hidden rounded-3xl"
-      style={{
-        backgroundColor: '#181818',
-        border: '1px solid rgba(255, 255, 255, 0.05)',
-        height: isExpandedView ? '100%' : 'auto',
-      }}
-    >
-      <div className="flex items-center justify-between px-6 py-4">
-        <span className="truncate text-sm font-medium text-text-primary">
-          {canvasDoc.title}
-        </span>
-        <div className="flex flex-shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="rounded-md px-2 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
-          >
-            Copy
-          </button>
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="rounded-md px-2 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
-          >
-            Download
-          </button>
-          <button
-            type="button"
-            onClick={isExpandedView ? handleCollapse : handleExpand}
-            disabled={!isExpandedView && expandedId !== null}
-            className="rounded-md p-1 text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
-            aria-label={isExpandedView ? 'Collapse canvas' : 'Expand canvas'}
-          >
-            {isExpandedView ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-          </button>
-        </div>
-      </div>
-      <div className={`canvas-content px-6 pb-6 ${isExpandedView ? 'flex-1 overflow-auto' : ''}`}>
-        <div
-          className={`prose prose-sm dark:prose-invert max-w-none text-text-primary ${!isExpandedView ? 'line-clamp-10' : ''}`}
-          dangerouslySetInnerHTML={{ __html: canvasDoc.content }}
-        />
-      </div>
-    </div>
-  );
+  // Determine what to render
+  const isThisAnimating =
+    isThisExpanded && (animationPhase === 'expanding' || animationPhase === 'collapsing');
 
-  // Determine what to show
-  const showPortalCard = animation.phase !== 'idle';
-  const isExpandedOrAnimating = isThisExpanded || animation.phase !== 'idle';
+  const showInlineCard = !isThisExpanded;
+  const showPortalCard = isThisAnimating;
+  const showPlaceholder = isThisExpanded;
 
-  // Container style with animated height
   const containerStyle: React.CSSProperties = {
-    height: containerHeight === 'auto' ? 'auto' : containerHeight,
-    transition: isExpandedOrAnimating ? 'height 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
-    overflow: 'hidden',
+    height: isThisExpanded ? (containerHeight === 'auto' ? 'auto' : containerHeight) : 'auto',
+    transition: isThisExpanded
+      ? `height ${ANIMATION_DURATION}ms cubic-bezier(0.4, 0, 0.2, 1)`
+      : 'none',
+    overflow: isThisExpanded ? 'hidden' : 'visible',
     position: 'relative',
   };
 
   return (
     <div className="not-prose" style={{ margin: '1rem 0' }}>
-      <div ref={cardRef} style={containerStyle}>
-        {/*
-          Hidden measurement element - always renders the full card for size calculation.
-          Used to get the correct target dimensions for collapse animation.
-          Position absolute so it doesn't affect container height during animation.
-        */}
+      <div style={containerStyle}>
+        {/* Ghost element - always present for measurement, visible when not expanded */}
         <div
-          ref={measureRef}
+          ref={ghostRef}
           style={{
-            visibility: isExpandedOrAnimating ? 'hidden' : 'visible',
-            position: isExpandedOrAnimating ? 'absolute' : 'relative',
-            pointerEvents: isExpandedOrAnimating ? 'none' : 'auto',
+            visibility: showInlineCard ? 'visible' : 'hidden',
+            position: showInlineCard ? 'relative' : 'absolute',
+            pointerEvents: showInlineCard ? 'auto' : 'none',
             width: '100%',
             top: 0,
             left: 0,
           }}
         >
-          <CardContent />
+          <CanvasCardContent
+            document={canvasDoc}
+            isExpandedView={false}
+            onExpand={handleExpand}
+            expandDisabled={expandedId !== null}
+          />
         </div>
 
-        {/* Clickable placeholder shown when expanded */}
-        {isExpandedOrAnimating && (
+        {/* Clickable placeholder shown when THIS card is expanded */}
+        {showPlaceholder && (
           <div
             className="cursor-pointer rounded-3xl border border-dashed border-border-medium p-4"
             style={{ backgroundColor: 'rgba(24, 24, 24, 0.3)' }}
             onClick={handleCollapse}
           >
-            <span className="text-sm text-text-secondary">
-              {canvasDoc.title} - Click to collapse
-            </span>
+            <span className="text-sm text-text-secondary">{canvasDoc.title} - Click to collapse</span>
           </div>
         )}
       </div>
 
-      {/* Portal card for animation and expanded state */}
+      {/* Portal card for animation only */}
       {showPortalCard &&
         createPortal(
           <div style={getPortalStyle()}>
-            <CardContent isExpandedView={animation.phase !== 'idle'} />
+            <CanvasCardContent
+              document={canvasDoc}
+              isExpandedView={true}
+              onCollapse={handleCollapse}
+            />
           </div>,
           document.body,
         )}

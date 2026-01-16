@@ -4,6 +4,7 @@ import { useRecoilValue } from 'recoil';
 import { getConfigDefaults } from 'librechat-data-provider';
 import { ResizablePanel, ResizablePanelGroup, useMediaQuery } from '@librechat/client';
 import type { ImperativePanelHandle } from 'react-resizable-panels';
+import type { CanvasDocument } from 'librechat-data-provider';
 import { useGetStartupConfig } from '~/data-provider';
 import CanvasPlaceholderPanel from './CanvasPlaceholderPanel';
 import ArtifactsPanel from './ArtifactsPanel';
@@ -49,7 +50,16 @@ const SidePanelGroup = memo(
     const isSmallScreen = useMediaQuery('(max-width: 767px)');
     const hideSidePanel = useRecoilValue(store.hideSidePanel);
     const expandedCanvasId = useRecoilValue(store.expandedCanvasIdState);
+    const canvasDocuments = useRecoilValue(store.canvasDocumentsState);
     const [shouldRenderCanvas, setShouldRenderCanvas] = useState(expandedCanvasId != null);
+
+    // Get the currently expanded document
+    const expandedDocument: CanvasDocument | null = useMemo(() => {
+      if (expandedCanvasId && canvasDocuments[expandedCanvasId]) {
+        return canvasDocuments[expandedCanvasId];
+      }
+      return null;
+    }, [expandedCanvasId, canvasDocuments]);
 
     const calculateLayout = useCallback(() => {
       const hasArtifacts = artifacts != null;
@@ -172,6 +182,7 @@ const SidePanelGroup = memo(
               shouldRender={shouldRenderCanvas}
               onRenderChange={setShouldRenderCanvas}
               hasArtifacts={shouldRenderArtifacts}
+              expandedDocument={expandedDocument}
             />
           )}
 

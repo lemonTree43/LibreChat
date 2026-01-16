@@ -1,7 +1,9 @@
 import { useRef, useEffect, memo, useCallback } from 'react';
-import { useRecoilValue, useSetRecoilState } from 'recoil';
+import { useRecoilValue, useRecoilState, useSetRecoilState } from 'recoil';
 import { ResizableHandleAlt, ResizablePanel } from '@librechat/client';
 import type { ImperativePanelHandle } from 'react-resizable-panels';
+import type { CanvasDocument } from 'librechat-data-provider';
+import CanvasCardContent from '~/components/Canvas/CanvasCardContent';
 import store from '~/store';
 
 interface CanvasPlaceholderPanelProps {
@@ -11,6 +13,7 @@ interface CanvasPlaceholderPanelProps {
   shouldRender: boolean;
   onRenderChange: (shouldRender: boolean) => void;
   hasArtifacts: boolean;
+  expandedDocument: CanvasDocument | null;
 }
 
 const CanvasPlaceholderPanel = memo(function CanvasPlaceholderPanel({
@@ -20,11 +23,14 @@ const CanvasPlaceholderPanel = memo(function CanvasPlaceholderPanel({
   shouldRender,
   onRenderChange,
   hasArtifacts,
+  expandedDocument,
 }: CanvasPlaceholderPanelProps) {
   const panelRef = useRef<ImperativePanelHandle>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const setTargetRect = useSetRecoilState(store.canvasTargetRectState);
+  const setCollapseStartRect = useSetRecoilState(store.canvasCollapseStartRectState);
   const expandedCanvasId = useRecoilValue(store.expandedCanvasIdState);
+  const [animationPhase, setAnimationPhase] = useRecoilState(store.canvasAnimationPhaseState);
 
   // Update target rect when container size/position changes
   const updateTargetRect = useCallback(() => {
@@ -75,9 +81,27 @@ const CanvasPlaceholderPanel = memo(function CanvasPlaceholderPanel({
     }
   }, [isExpanded, shouldRender, onRenderChange, currentLayout, updateTargetRect]);
 
+  // Handle collapse from the expanded card
+  const handleCollapse = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      // CRITICAL: Capture the current panel position BEFORE changing animation phase
+      // This is the starting position for the collapse animation
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setCollapseStartRect(rect);
+      }
+      setAnimationPhase('collapsing');
+    },
+    [setAnimationPhase, setCollapseStartRect],
+  );
+
   if (!shouldRender) {
     return null;
   }
+
+  // Show the actual card content when animation is complete (phase is 'expanded')
+  const showActualCard = animationPhase === 'expanded' && expandedDocument;
 
   return (
     <>
@@ -95,8 +119,16 @@ const CanvasPlaceholderPanel = memo(function CanvasPlaceholderPanel({
         id="canvas-placeholder-panel"
         className="canvas-panel-transition"
       >
-        {/* Container for measuring target position - the actual card is rendered via portal */}
-        <div ref={containerRef} className="h-full w-full p-2" />
+        {/* Container for measuring target position AND rendering actual card when expanded */}
+        <div ref={containerRef} className="h-full w-full p-2">
+          {showActualCard && (
+            <CanvasCardContent
+              document={expandedDocument}
+              isExpandedView={true}
+              onCollapse={handleCollapse}
+            />
+          )}
+        </div>
       </ResizablePanel>
     </>
   );
