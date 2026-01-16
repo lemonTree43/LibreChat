@@ -143,11 +143,10 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
   // After portal renders at start position, trigger animation to target on next frame
   useEffect(() => {
     if (!hasRenderedInitialFrame && isThisExpanded && animationPhase === 'expanding') {
-      // Wait for targetRect to be available (panel has expanded)
+      // Wait for targetRect to be available (now calculated, so immediately correct)
       if (!targetRect) return;
 
-      // Capture the target rect once - the panel jumps to final size immediately
-      // so we animate directly from start to this captured target
+      // Capture the target rect (calculated dimensions are immediately correct)
       if (!expandTargetRectRef.current) {
         expandTargetRectRef.current = targetRect;
         console.log('[EXPAND] Captured targetRect:', {
