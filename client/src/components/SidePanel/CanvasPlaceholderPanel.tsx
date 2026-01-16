@@ -32,58 +32,21 @@ const CanvasPlaceholderPanel = memo(function CanvasPlaceholderPanel({
   const expandedCanvasId = useRecoilValue(store.expandedCanvasIdState);
   const [animationPhase, setAnimationPhase] = useRecoilState(store.canvasAnimationPhaseState);
 
-  // Calculate target rect based on final layout percentages
-  // This gives us the position the panel WILL be at, not where it currently is
-  const calculateTargetRect = useCallback(() => {
-    if (!containerRef.current) return;
-
-    // Get the parent panel group's dimensions
-    const panelGroup = containerRef.current.closest('[data-panel-group]');
-    if (!panelGroup) return;
-
-    const groupRect = panelGroup.getBoundingClientRect();
-    const totalWidth = groupRect.width;
-
-    // Calculate positions based on final layout percentages
-    // currentLayout = [mainPanelPercent, canvasPanelPercent, navPanelPercent]
-    const mainPanelWidth = (totalWidth * currentLayout[0]) / 100;
-    const canvasPanelWidth = (totalWidth * currentLayout[1]) / 100;
-
-    // Account for resize handle width (approximately 12px)
-    const handleWidth = 12;
-
-    // The canvas panel starts after the main panel + handle
-    const canvasPanelLeft = groupRect.left + mainPanelWidth + handleWidth;
-
-    // Container has p-2 padding (8px)
-    const padding = 8;
-
-    const rect = {
-      top: groupRect.top + padding,
-      left: canvasPanelLeft + padding,
-      width: canvasPanelWidth - handleWidth - (padding * 2),
-      height: groupRect.height - (padding * 2),
-      bottom: groupRect.bottom - padding,
-      right: canvasPanelLeft + canvasPanelWidth - padding,
-      x: canvasPanelLeft + padding,
-      y: groupRect.top + padding,
-      toJSON: () => rect,
-    } as DOMRect;
-
-    setTargetRect(rect);
-  }, [currentLayout, setTargetRect]);
-
-  // Update target rect from actual measurement (for when panel is fully expanded)
+  // Update target rect by measuring the actual container
   const updateTargetRect = useCallback(() => {
     if (containerRef.current && expandedCanvasId) {
       const rect = containerRef.current.getBoundingClientRect();
+      console.log('[TARGET] updateTargetRect:', { left: rect.left, top: rect.top, width: rect.width, height: rect.height });
       setTargetRect(rect);
     }
   }, [expandedCanvasId, setTargetRect]);
 
-  // Observe container for size changes (after initial expansion)
+  // Observe container for size changes
   useEffect(() => {
     if (!containerRef.current || !expandedCanvasId) return;
+
+    // Initial measurement
+    updateTargetRect();
 
     // Use ResizeObserver for ongoing updates (resize handle dragging, window resize)
     const observer = new ResizeObserver(updateTargetRect);
@@ -106,13 +69,13 @@ const CanvasPlaceholderPanel = memo(function CanvasPlaceholderPanel({
   useEffect(() => {
     if (isExpanded) {
       onRenderChange(true);
-      // Calculate target rect IMMEDIATELY based on final layout
-      // This gives us the correct target position before the panel animates
-      calculateTargetRect();
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           panelRef.current?.expand();
           panelRef.current?.resize(currentLayout[1]);
+          // Measure target rect after panel starts expanding
+          // The ResizeObserver will continue updating as the panel animates
+          updateTargetRect();
         });
       });
     } else if (shouldRender) {
@@ -120,7 +83,7 @@ const CanvasPlaceholderPanel = memo(function CanvasPlaceholderPanel({
       // Delay unmount for collapse animation
       setTimeout(() => onRenderChange(false), 300);
     }
-  }, [isExpanded, shouldRender, onRenderChange, currentLayout, calculateTargetRect]);
+  }, [isExpanded, shouldRender, onRenderChange, currentLayout, updateTargetRect]);
 
   // Handle collapse from the expanded card
   const handleCollapse = useCallback(

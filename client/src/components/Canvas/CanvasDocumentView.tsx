@@ -27,6 +27,9 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
   // Track the starting rect for expand animation (inline position)
   const expandStartRectRef = useRef<DOMRect | null>(null);
 
+  // Track the target rect captured once for the expand animation
+  const expandTargetRectRef = useRef<DOMRect | null>(null);
+
   // Track whether the portal has rendered its initial frame at start position
   const [hasRenderedInitialFrame, setHasRenderedInitialFrame] = useState(false);
 
@@ -78,6 +81,13 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
       const rect = ghostRef.current.getBoundingClientRect();
       const currentHeight = rect.height;
 
+      console.log('[EXPAND] handleExpand clicked, capturing startRect:', {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      });
+
       // Store the start rect for expand animation
       expandStartRectRef.current = rect;
       setCollapseStartRect(null);
@@ -89,6 +99,7 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
 
       // Start animation
       requestAnimationFrame(() => {
+        console.log('[EXPAND] Setting phase to expanding');
         setAnimationPhase('expanding');
         setExpandedId(canvasDoc.id);
 
@@ -131,19 +142,43 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
 
   // After portal renders at start position, trigger animation to target on next frame
   useEffect(() => {
-    if (!hasRenderedInitialFrame && isThisExpanded && (animationPhase === 'expanding' || animationPhase === 'collapsing')) {
-      // Use double rAF to ensure the browser has painted the initial position
+    if (!hasRenderedInitialFrame && isThisExpanded && animationPhase === 'expanding') {
+      // Wait for targetRect to be available (panel has expanded)
+      if (!targetRect) return;
+
+      // Capture the target rect once - the panel jumps to final size immediately
+      // so we animate directly from start to this captured target
+      if (!expandTargetRectRef.current) {
+        expandTargetRectRef.current = targetRect;
+        console.log('[EXPAND] Captured targetRect:', {
+          left: targetRect.left,
+          width: targetRect.width,
+          height: targetRect.height,
+        });
+      }
+
+      // Use double rAF to ensure the start position is painted before animating
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
+          console.log('[EXPAND] Setting hasRenderedInitialFrame=true');
           setHasRenderedInitialFrame(true);
-          // When collapsing, animate container height back to full card height
-          if (animationPhase === 'collapsing') {
-            setContainerHeight(cardHeight);
-          }
         });
       });
     }
-  }, [hasRenderedInitialFrame, isThisExpanded, animationPhase, cardHeight]);
+
+    if (!hasRenderedInitialFrame && isThisExpanded && animationPhase === 'collapsing') {
+      // For collapsing, we need collapseStartRect (captured when collapse was triggered)
+      if (!collapseStartRect) return;
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setHasRenderedInitialFrame(true);
+          // Animate container height back to full card height
+          setContainerHeight(cardHeight);
+        });
+      });
+    }
+  }, [hasRenderedInitialFrame, isThisExpanded, animationPhase, cardHeight, targetRect, collapseStartRect]);
 
   // Watch for expand animation completion
   useEffect(() => {
@@ -165,6 +200,7 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
         setAnimationPhase('idle');
         setContainerHeight('auto');
         expandStartRectRef.current = null;
+        expandTargetRectRef.current = null;
         setCollapseStartRect(null);
         setHasRenderedInitialFrame(false);
       }, ANIMATION_DURATION);
@@ -176,19 +212,30 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
   const getPortalStyle = (): React.CSSProperties => {
     if (animationPhase === 'expanding' && isThisExpanded) {
       const startRect = expandStartRectRef.current;
+      const capturedTarget = expandTargetRectRef.current;
 
-      if (hasRenderedInitialFrame && targetRect) {
-        // Animate to expanded position
+      if (hasRenderedInitialFrame && capturedTarget) {
+        console.log('[STYLE] expanding -> animating to capturedTarget:', {
+          left: capturedTarget.left,
+          width: capturedTarget.width,
+          height: capturedTarget.height,
+        });
+        // Animate from start position to captured target position
         return {
           position: 'fixed',
-          top: targetRect.top,
-          left: targetRect.left,
-          width: targetRect.width,
-          height: targetRect.height,
+          top: capturedTarget.top,
+          left: capturedTarget.left,
+          width: capturedTarget.width,
+          height: capturedTarget.height,
           zIndex: 9999,
           transition: `all ${ANIMATION_DURATION}ms cubic-bezier(0.4, 0, 0.2, 1)`,
         };
       } else if (startRect) {
+        console.log('[STYLE] expanding -> at startRect (no transition):', {
+          left: startRect.left,
+          width: startRect.width,
+          height: startRect.height,
+        });
         // Start at inline position (no transition)
         return {
           position: 'fixed',
