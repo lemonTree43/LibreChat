@@ -297,7 +297,7 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
   };
 
   return (
-    <div className="not-prose" style={{ margin: '1rem 0' }}>
+    <div style={{ margin: '1rem 0' }}>
       <div style={containerStyle}>
         {/* Ghost element - always present for measurement, visible when not expanded */}
         <div
@@ -331,20 +331,18 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
         )}
       </div>
 
-      <div className="prose prose-sm dark:prose-invert">
-        {/* Portal card for animation only */}
-        {showPortalCard &&
-          createPortal(
-            <div style={getPortalStyle()}>
-              <CanvasCardContent
-                document={canvasDoc}
-                isExpandedView={true}
-                onCollapse={handleCollapse}
-              />
-            </div>,
-            document.body,
-          )}
-      </div>
+      {/* Portal card for animation only */}
+      {showPortalCard &&
+        createPortal(
+          <div style={getPortalStyle()}>
+            <CanvasCardContent
+              document={canvasDoc}
+              isExpandedView={true}
+              onCollapse={handleCollapse}
+            />
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

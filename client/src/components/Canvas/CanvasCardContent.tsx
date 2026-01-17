@@ -58,6 +58,8 @@ function CanvasCardContent({
         backgroundColor: '#181818',
         border: '1px solid rgba(255, 255, 255, 0.05)',
         height: isExpandedView ? '100%' : 'auto',
+        // Isolate from parent styles
+        // isolation: 'isolate',
       }}
     >
       <div className="flex items-center justify-between px-6 py-4">
@@ -88,9 +90,10 @@ function CanvasCardContent({
           </button>
         </div>
       </div>
-      <div className={`canvas-content px-6 pb-6 ${isExpandedView ? 'flex-1 overflow-auto' : ''}`}>
+      <div className={`px-6 pb-6 ${isExpandedView ? 'flex-1 overflow-auto' : ''}`}>
         <div
-          className={`prose prose-sm dark:prose-invert max-w-none text-text-primary ${!isExpandedView ? 'line-clamp-10' : ''}`}
+          className={`prose prose-sm dark:prose-invert max-w-none ${!isExpandedView ? 'line-clamp-10' : ''}`}
+          // style={{ all: 'revert' }}
           dangerouslySetInnerHTML={{ __html: canvasDoc.content }}
         />
       </div>
