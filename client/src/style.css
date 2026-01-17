@@ -1531,40 +1531,37 @@ html {
   );
 }
 
-.markdown h1 {
+.markdown:not(:has(.canvas-content)) h1 {
   font-size: calc(var(--markdown-font-size) * 1.75);
 }
-.markdown h2 {
+.markdown:not(:has(.canvas-content)) h2 {
   font-size: calc(var(--markdown-font-size) * 1.5);
-}
-
-.markdown h2 {
   margin-bottom: 0.4rem;
   margin-top: 0.8rem;
 }
 
-.markdown h3 {
+.markdown:not(:has(.canvas-content)) h3 {
   font-weight: 600;
   font-size: calc(var(--markdown-font-size) * 1.25);
 }
 
-.markdown h3,
-.markdown h4 {
+.markdown:not(:has(.canvas-content)) h3,
+.markdown:not(:has(.canvas-content)) h4 {
   margin-bottom: 0.3rem;
   margin-top: 0.6rem;
 }
 
-.markdown h4 {
+.markdown:not(:has(.canvas-content)) h4 {
   font-weight: 400;
   font-size: calc(var(--markdown-font-size) * 1.1);
 }
 
-.markdown h5 {
+.markdown:not(:has(.canvas-content)) h5 {
   font-weight: 600;
   font-size: var(--markdown-font-size);
 }
 
-.markdown blockquote {
+.markdown:not(:has(.canvas-content)) blockquote {
   --tw-border-opacity: 1;
   border-color: var(--gray-400);
   border-left-width: 2px;
@@ -1572,7 +1569,7 @@ html {
   padding-left: 1rem;
 }
 
-.markdown table {
+.markdown:not(:has(.canvas-content)) table {
   --tw-border-spacing-x: 0px;
   --tw-border-spacing-y: 0px;
   border-collapse: separate;
@@ -1580,7 +1577,7 @@ html {
   width: 100%;
 }
 
-.markdown th {
+.markdown:not(:has(.canvas-content)) th {
   background-color: rgba(236, 236, 241, 0.2);
   border-bottom-width: 1px;
   border-left-width: 1px;
@@ -1588,35 +1585,35 @@ html {
   padding: 0.25rem 0.75rem;
 }
 
-.markdown th:first-child {
+.markdown:not(:has(.canvas-content)) th:first-child {
   border-top-left-radius: 0.375rem;
 }
 
-.markdown th:last-child {
+.markdown:not(:has(.canvas-content)) th:last-child {
   border-right-width: 1px;
   border-color: #d1d5db;
   border-top-right-radius: 0.375rem;
 }
 
-.markdown td {
+.markdown:not(:has(.canvas-content)) td {
   border-bottom-width: 1px;
   border-left-width: 1px;
   padding: 0.25rem 0.75rem;
 }
 
-.markdown td:last-child {
+.markdown:not(:has(.canvas-content)) td:last-child {
   border-right-width: 1px;
 }
 
-.markdown tbody tr:last-child td:first-child {
+.markdown:not(:has(.canvas-content)) tbody tr:last-child td:first-child {
   border-bottom-left-radius: 0.375rem;
 }
 
-.markdown tbody tr:last-child td:last-child {
+.markdown:not(:has(.canvas-content)) tbody tr:last-child td:last-child {
   border-bottom-right-radius: 0.375rem;
 }
 
-.markdown a {
+.markdown:not(:has(.canvas-content)) a {
   text-decoration-line: underline;
   text-underline-offset: 2px;
 }
@@ -1790,39 +1787,39 @@ html {
 .markdown {
   max-width: none;
 }
-.markdown h1,
-.markdown h2 {
+.markdown:not(:has(.canvas-content)) h1,
+.markdown:not(:has(.canvas-content)) h2 {
   font-weight: 600;
 }
-.markdown h2 {
+.markdown:not(:has(.canvas-content)) h2 {
   margin-bottom: 0.4rem;
   margin-top: 0.8rem;
 }
-.markdown h3 {
+.markdown:not(:has(.canvas-content)) h3 {
   font-weight: 600;
 }
-.markdown h3,
-.markdown h4 {
+.markdown:not(:has(.canvas-content)) h3,
+.markdown:not(:has(.canvas-content)) h4 {
   margin-bottom: 0.3rem;
   margin-top: 0.6rem;
 }
-.markdown h4 {
+.markdown:not(:has(.canvas-content)) h4 {
   font-weight: 400;
 }
-.markdown h5 {
+.markdown:not(:has(.canvas-content)) h5 {
   font-weight: 600;
 }
-.markdown blockquote {
+.markdown:not(:has(.canvas-content)) blockquote {
   --tw-border-opacity: 1;
   border-color: var(--gray-300);
   border-left-width: 2px;
   line-height: 1rem;
   padding-left: 1rem;
 }
-.dark .markdown blockquote {
+.dark .markdown:not(:has(.canvas-content)) blockquote {
   border-color: var(--gray-600);
 }
-.markdown table {
+.markdown:not(:has(.canvas-content)) table {
   --tw-border-spacing-x: 0px;
   --tw-border-spacing-y: 0px;
   border-collapse: separate;
@@ -1830,7 +1827,7 @@ html {
   width: 100%;
   border-color: var(--gray-300);
 }
-.markdown th {
+.markdown:not(:has(.canvas-content)) th {
   background-color: var(--gray-100);
   border-bottom-width: 1px;
   border-left-width: 1px;
@@ -1839,40 +1836,40 @@ html {
   padding: 0.25rem 0.75rem;
   font-weight: 600;
 }
-.dark .markdown th {
+.dark .markdown:not(:has(.canvas-content)) th {
   border-color: var(--gray-600);
   background-color: var(--gray-600);
 }
-.markdown th:first-child {
+.markdown:not(:has(.canvas-content)) th:first-child {
   border-top-left-radius: 0.75rem;
 }
-.markdown th:last-child {
+.markdown:not(:has(.canvas-content)) th:last-child {
   border-right-width: 1px;
   border-top-right-radius: 0.75rem;
 }
-.markdown td {
+.markdown:not(:has(.canvas-content)) td {
   border-bottom-width: 1px;
   border-left-width: 1px;
   border-color: var(--gray-300);
   padding: 0.25rem 0.75rem;
 }
-.markdown td:last-child {
+.markdown:not(:has(.canvas-content)) td:last-child {
   border-right-width: 1px;
   border-color: var(--gray-300);
 }
-.dark .markdown td {
+.dark .markdown:not(:has(.canvas-content)) td {
   border-color: var(--gray-600);
 }
-.dark .markdown td:last-child {
+.dark .markdown:not(:has(.canvas-content)) td:last-child {
   border-color: var(--gray-600);
 }
-.markdown tbody tr:last-child td:first-child {
+.markdown:not(:has(.canvas-content)) tbody tr:last-child td:first-child {
   border-bottom-left-radius: 0.75rem;
 }
-.markdown tbody tr:last-child td:last-child {
+.markdown:not(:has(.canvas-content)) tbody tr:last-child td:last-child {
   border-bottom-right-radius: 0.75rem;
 }
-.markdown a {
+.markdown:not(:has(.canvas-content)) a {
   text-decoration-line: underline;
   text-underline-offset: 2px;
 }

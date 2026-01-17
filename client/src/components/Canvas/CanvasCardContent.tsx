@@ -53,7 +53,7 @@ function CanvasCardContent({
 
   return (
     <div
-      className="flex flex-col gap-1 overflow-hidden rounded-3xl"
+      className="canvas-content flex flex-col gap-1 overflow-hidden rounded-3xl"
       style={{
         backgroundColor: '#181818',
         border: '1px solid rgba(255, 255, 255, 0.05)',
