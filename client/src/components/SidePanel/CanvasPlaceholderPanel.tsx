@@ -115,11 +115,11 @@ const CanvasPlaceholderPanel = memo(function CanvasPlaceholderPanel({
   useEffect(() => {
     if (isExpanded) {
       onRenderChange(true);
+      // Single rAF to ensure render has mounted, then expand immediately
+      // The CSS transition handles the animation smoothly
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          panelRef.current?.expand();
-          panelRef.current?.resize(currentLayout[1]);
-        });
+        panelRef.current?.expand();
+        panelRef.current?.resize(currentLayout[1]);
       });
     } else if (shouldRender) {
       panelRef.current?.collapse();

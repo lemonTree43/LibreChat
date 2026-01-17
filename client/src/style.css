@@ -2931,6 +2931,10 @@ html {
 
 /* Canvas panel transition for smooth expand/collapse */
 .canvas-panel-transition {
-  transition: flex-grow 0.3s ease-out, flex-shrink 0.3s ease-out, flex-basis 0.3s ease-out !important;
+  transition: flex-grow 0.3s cubic-bezier(0.4, 0, 0.2, 1), flex-shrink 0.3s cubic-bezier(0.4, 0, 0.2, 1), flex-basis 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  will-change: flex-grow, flex-shrink, flex-basis;
+  /* Force GPU compositing for smoother animation */
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
  

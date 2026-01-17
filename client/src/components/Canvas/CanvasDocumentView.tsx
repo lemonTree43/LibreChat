@@ -331,18 +331,20 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
         )}
       </div>
 
-      {/* Portal card for animation only */}
-      {showPortalCard &&
-        createPortal(
-          <div style={getPortalStyle()}>
-            <CanvasCardContent
-              document={canvasDoc}
-              isExpandedView={true}
-              onCollapse={handleCollapse}
-            />
-          </div>,
-          document.body,
-        )}
+      <div className="prose prose-sm dark:prose-invert">
+        {/* Portal card for animation only */}
+        {showPortalCard &&
+          createPortal(
+            <div style={getPortalStyle()}>
+              <CanvasCardContent
+                document={canvasDoc}
+                isExpandedView={true}
+                onCollapse={handleCollapse}
+              />
+            </div>,
+            document.body,
+          )}
+      </div>
     </div>
   );
 }

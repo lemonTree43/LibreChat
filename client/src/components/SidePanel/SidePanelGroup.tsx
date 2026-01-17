@@ -51,6 +51,7 @@ const SidePanelGroup = memo(
     const hideSidePanel = useRecoilValue(store.hideSidePanel);
     const expandedCanvasId = useRecoilValue(store.expandedCanvasIdState);
     const canvasDocuments = useRecoilValue(store.canvasDocumentsState);
+    const animationPhase = useRecoilValue(store.canvasAnimationPhaseState);
     const [shouldRenderCanvas, setShouldRenderCanvas] = useState(expandedCanvasId != null);
 
     // Get the currently expanded document
@@ -122,17 +123,19 @@ const SidePanelGroup = memo(
 
     // Resize messages panel and collapse side panel when canvas expands/collapses
     useEffect(() => {
-      if (expandedCanvasId != null) {
+      if (animationPhase === 'expanding') {
         // Canvas is expanding - shrink messages panel and collapse side panel
         panelRef.current?.collapse();
-
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            messagesPanelRef.current?.resize(currentLayout[0]);
-          });
-        });
+        // Resize immediately - the CSS transition handles the animation
+        messagesPanelRef.current?.resize(currentLayout[0]);
+      } else if (animationPhase === 'collapsing') {
+        // Canvas is collapsing - expand messages panel back to normal
+        // Calculate the normal layout (without canvas)
+        const navSize = defaultLayout.length === 2 ? defaultLayout[1] : defaultLayout[2];
+        const normalMainSize = 100 - navSize;
+        messagesPanelRef.current?.resize(normalMainSize);
       }
-    }, [expandedCanvasId, currentLayout]);
+    }, [animationPhase, currentLayout, defaultLayout]);
 
     /** Memoized close button handler to prevent re-creating it */
     const handleClosePanel = useCallback(() => {
@@ -159,7 +162,7 @@ const SidePanelGroup = memo(
             minSize={minSizeMain}
             order={1}
             id="messages-view"
-            className={expandedCanvasId != null ? 'canvas-panel-transition' : ''}
+            className={animationPhase !== 'idle' ? 'canvas-panel-transition' : ''}
           >
             {children}
           </ResizablePanel>
