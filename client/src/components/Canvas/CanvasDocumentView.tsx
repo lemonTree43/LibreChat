@@ -37,6 +37,9 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
   const [containerHeight, setContainerHeight] = useState<number | 'auto'>('auto');
   const [cardHeight, setCardHeight] = useState<number>(0);
 
+  // Track the predicted collapse target position (where ghost will be after panel expands)
+  const collapseTargetRectRef = useRef<DOMRect | null>(null);
+
   // Update inline rect when ghost position changes
   const updateInlineRect = useCallback(() => {
     if (ghostRef.current && isThisExpanded) {
@@ -112,6 +115,147 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
     [canvasDoc.id, setExpandedId, setAnimationPhase, setCollapseStartRect],
   );
 
+  // Calculate predicted collapse target position
+  // Called when collapse starts to predict where ghost will be after panel expands
+  const calculateCollapseTargetPosition = useCallback(() => {
+    if (!ghostRef.current) return;
+
+    const currentGhostRect = ghostRef.current.getBoundingClientRect();
+    setInlineRect(currentGhostRect);
+
+    // Find the messages panel to calculate width change
+    const messagesPanel = document.getElementById('messages-view');
+    if (messagesPanel) {
+      const panelRect = messagesPanel.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+
+      // When canvas collapses, messages panel expands to ~97% of viewport (minus nav ~3%)
+      const navSize = 0.03; // 3% for nav when collapsed
+      const expandedPanelWidth = viewportWidth * (1 - navSize);
+
+      console.log('[COLLAPSE DEBUG] Panel measurements:', {
+        currentPanelLeft: panelRect.left,
+        currentPanelWidth: panelRect.width,
+        viewportWidth,
+        expandedPanelWidth,
+      });
+
+      console.log('[COLLAPSE DEBUG] Ghost measurements:', {
+        ghostLeft: currentGhostRect.left,
+        ghostWidth: currentGhostRect.width,
+        ghostTop: currentGhostRect.top,
+        ghostHeight: currentGhostRect.height,
+      });
+
+      // The content area has padding on both sides
+      // We need to find the content container's padding/margin structure
+      // The ghost is NOT positioned by percentage - it's inside a centered content area
+
+      // Calculate the right edge distance from panel right (this includes scrollbar, padding)
+      const ghostRightEdge = currentGhostRect.left + currentGhostRect.width;
+      const panelRightEdge = panelRect.left + panelRect.width;
+      const rightPadding = panelRightEdge - ghostRightEdge;
+
+      // The left padding from panel to ghost
+      const leftPadding = currentGhostRect.left - panelRect.left;
+
+      console.log('[COLLAPSE DEBUG] Padding analysis:', {
+        leftPadding,
+        rightPadding,
+        totalPadding: leftPadding + rightPadding,
+        contentWidth: panelRect.width - leftPadding - rightPadding,
+      });
+
+      // Calculate expanded panel width properly:
+      // The sidebar (panelRect.left) stays fixed
+      // When canvas collapses, the messages panel expands to fill that space
+      // Expanded width = viewport - sidebar - collapsed_nav_width
+      // The nav panel collapses to essentially 0 (just the resize handle)
+
+      const sidebarWidth = panelRect.left; // The sidebar is to the left of the panel
+      const collapsedNavWidth = 0; // Nav collapses to ~0 when canvas is gone
+      const predictedExpandedPanelWidth = viewportWidth - sidebarWidth - collapsedNavWidth;
+
+      console.log('[COLLAPSE DEBUG] Panel expansion calculation:', {
+        sidebarWidth,
+        collapsedNavWidth,
+        predictedExpandedPanelWidth,
+      });
+
+      // The ghost is centered in the panel
+      const panelCenter = panelRect.left + panelRect.width / 2;
+      const ghostCenter = currentGhostRect.left + currentGhostRect.width / 2;
+      const offsetFromCenter = ghostCenter - panelCenter;
+
+      console.log('[COLLAPSE DEBUG] Center analysis:', {
+        panelCenter,
+        ghostCenter,
+        offsetFromCenter,
+      });
+
+      // Calculate the expanded panel center
+      const expandedPanelCenter = panelRect.left + predictedExpandedPanelWidth / 2;
+
+      // The ghost stays centered (offset from center should remain ~0)
+      const predictedGhostCenter = expandedPanelCenter + offsetFromCenter;
+      const predictedWidth = currentGhostRect.width + 64; // Based on actual observation
+      const predictedLeft = predictedGhostCenter - predictedWidth / 2;
+
+      console.log('[COLLAPSE DEBUG] Predicted values:', {
+        expandedPanelCenter,
+        predictedGhostCenter,
+        predictedLeft,
+        predictedWidth,
+      });
+
+      // Create a predicted rect
+      collapseTargetRectRef.current = {
+        top: currentGhostRect.top,
+        left: predictedLeft,
+        width: predictedWidth,
+        height: currentGhostRect.height,
+        bottom: currentGhostRect.bottom,
+        right: predictedLeft + predictedWidth,
+        x: predictedLeft,
+        y: currentGhostRect.top,
+        toJSON: () => ({}),
+      } as DOMRect;
+
+      console.log('[COLLAPSE] Final predicted target:', {
+        top: currentGhostRect.top,
+        left: predictedLeft,
+        width: predictedWidth,
+        height: currentGhostRect.height,
+      });
+
+      // Log actual position after animation for comparison
+      setTimeout(() => {
+        if (ghostRef.current) {
+          const actualRect = ghostRef.current.getBoundingClientRect();
+          const actualPanelRect = messagesPanel.getBoundingClientRect();
+          console.log('[COLLAPSE DEBUG] ACTUAL final position (after animation):', {
+            actualLeft: actualRect.left,
+            actualWidth: actualRect.width,
+            actualTop: actualRect.top,
+            diffLeft: actualRect.left - predictedLeft,
+            diffWidth: actualRect.width - predictedWidth,
+          });
+          console.log('[COLLAPSE DEBUG] ACTUAL panel after animation:', {
+            panelLeft: actualPanelRect.left,
+            panelWidth: actualPanelRect.width,
+            panelCenter: actualPanelRect.left + actualPanelRect.width / 2,
+            ghostCenter: actualRect.left + actualRect.width / 2,
+            ghostLeftPadding: actualRect.left - actualPanelRect.left,
+          });
+        }
+      }, ANIMATION_DURATION + 50);
+    } else {
+      console.log('[COLLAPSE DEBUG] Messages panel not found!');
+      // Fallback if we can't find the panel
+      collapseTargetRectRef.current = currentGhostRect;
+    }
+  }, [setInlineRect]);
+
   // Handle collapse - triggered from inline placeholder click
   // Note: When collapse is triggered from CanvasPlaceholderPanel, it captures the rect there
   const handleCollapse = useCallback(
@@ -125,11 +269,8 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
         setCollapseStartRect(targetRect);
       }
 
-      // Get current inline ghost position for animation target
-      if (ghostRef.current) {
-        const rect = ghostRef.current.getBoundingClientRect();
-        setInlineRect(rect);
-      }
+      // Calculate predicted target position
+      calculateCollapseTargetPosition();
 
       // Reset initial frame flag for collapse animation
       setHasRenderedInitialFrame(false);
@@ -137,8 +278,16 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
       // Start collapsing phase - container height will animate after initial frame renders
       setAnimationPhase('collapsing');
     },
-    [setAnimationPhase, setInlineRect, isThisExpanded, targetRect, collapseStartRect, setCollapseStartRect],
+    [setAnimationPhase, isThisExpanded, targetRect, collapseStartRect, setCollapseStartRect, calculateCollapseTargetPosition],
   );
+
+  // When collapse is triggered from CanvasPlaceholderPanel, we need to calculate the target position
+  // This effect runs when animation phase changes to collapsing
+  useEffect(() => {
+    if (animationPhase === 'collapsing' && isThisExpanded && !collapseTargetRectRef.current) {
+      calculateCollapseTargetPosition();
+    }
+  }, [animationPhase, isThisExpanded, calculateCollapseTargetPosition]);
 
   // After portal renders at start position, trigger animation to target on next frame
   useEffect(() => {
@@ -200,6 +349,7 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
         setContainerHeight('auto');
         expandStartRectRef.current = null;
         expandTargetRectRef.current = null;
+        collapseTargetRectRef.current = null;
         setCollapseStartRect(null);
         setHasRenderedInitialFrame(false);
       }, ANIMATION_DURATION);
@@ -249,16 +399,17 @@ function CanvasDocumentView({ document: canvasDoc }: CanvasDocumentViewProps) {
     }
 
     if (animationPhase === 'collapsing' && isThisExpanded) {
-      const inlineRect = ghostRef.current?.getBoundingClientRect();
+      // Use the predicted target position (calculated when collapse started)
+      const predictedTarget = collapseTargetRectRef.current;
 
-      if (hasRenderedInitialFrame && inlineRect) {
-        // Animate to inline position
+      if (hasRenderedInitialFrame && predictedTarget) {
+        // Animate to predicted inline position
         return {
           position: 'fixed',
-          top: inlineRect.top,
-          left: inlineRect.left,
-          width: inlineRect.width,
-          height: inlineRect.height,
+          top: predictedTarget.top,
+          left: predictedTarget.left,
+          width: predictedTarget.width,
+          height: predictedTarget.height,
           zIndex: 9999,
           transition: `all ${ANIMATION_DURATION}ms cubic-bezier(0.4, 0, 0.2, 1)`,
         };
